@@ -249,19 +249,6 @@ export class MJMLService {
   }
 
   /**
-   * Generate variable preview data for different platforms
-   * @param {Object} variables - Extracted variables
-   * @returns {Object} - Data for Mailjet and Brevo
-   */
-  static generatePreviewData(variables) {
-    // Generate Mailjet format
-   
-    return {
-      json: variables,
-    };
-  }
-
-  /**
    * Render MJML content to HTML with permissive options and automatic syntax conversion
    * @param {string} mjmlContent - The MJML content to render
    * @param {Object} options - Rendering options
@@ -271,7 +258,6 @@ export class MJMLService {
     // Configure MJML with permissive options
     const mjmlOptions = {
       keepComments: false,
-      beautify: true,
       minify: false,
       validationLevel: options.validationLevel || 'skip',
       filePath: options.filePath,
@@ -281,7 +267,7 @@ export class MJMLService {
     try {
       // Extract variables for preview before any conversion
       const originalVariables = this.extractTemplateVariables(mjmlContent);
-      const previewData = this.generatePreviewData(originalVariables);
+      const previewData = originalVariables;
       
       // First, try to convert any template syntax within the MJML itself
       // This handles variables in the MJML attributes

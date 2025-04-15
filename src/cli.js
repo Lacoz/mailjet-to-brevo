@@ -2,14 +2,13 @@ import { program } from 'commander';
 import { convertCommand } from './commands/convert.js';
 
 program
-  .version('1.0.0')
-  .description('Mailjet to Brevo conversion CLI');
+  .description('A CLI tool for converting Mailjet MJML templates to Brevo-compatible HTML');
 
 program
   .command('convert <mjmlPath> [outputPath]')
-  .description('Convert Mailjet MJML template to HTML Brevo template file')
-  .option('--strict', 'Use strict validation (fails on unconvertible patterns)')
-  .option('--save-preview', 'Save template variable preview data as JSON')
+  .description('Convert a Mailjet MJML template to a Brevo-compatible HTML file with automatic syntax conversion')
+  .option('--strict', 'Enable strict validation mode that fails on unconvertible patterns')
+  .option('--save-preview', 'Save a JSON file with template variable preview data for both formats')
   .action((mjmlPath, outputPath, options) => {
     convertCommand(mjmlPath, outputPath, options);
   });

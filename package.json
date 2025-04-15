@@ -1,6 +1,6 @@
 {
   "name": "mailjet-to-brevo",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Script to convert Mailjet template to Brevo template",
   "main": "index.js",
   "type": "module",

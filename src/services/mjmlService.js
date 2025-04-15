@@ -255,17 +255,9 @@ export class MJMLService {
    */
   static generatePreviewData(variables) {
     // Generate Mailjet format
-    const mailjetData = { ...variables };
-    
-    // Generate Brevo format (prefixed with params.)
-    const brevoData = {};
-    Object.entries(variables).forEach(([key, value]) => {
-      brevoData[`params.${key}`] = value;
-    });
-    
+   
     return {
-      mailjet: mailjetData,
-      brevo: brevoData
+      json: variables,
     };
   }
 

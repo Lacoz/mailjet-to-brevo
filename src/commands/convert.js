@@ -47,13 +47,9 @@ const convertMJMLToHTML = async (mjmlFilePath, outputPath, options = {}) => {
     }
     
     // Display preview data in console
-    console.log('\nTemplate Variables Preview:');
+    console.log('\nTemplate Variables:');
     
-    console.log('\nMailjet Format:');
-    console.log(JSON.stringify(renderResult.previewData.mailjet, null, 2));
-    
-    console.log('\nBrevo Format:');
-    console.log(JSON.stringify(renderResult.previewData.brevo, null, 2));
+    console.log(JSON.stringify(renderResult.previewData.json, null, 2));
 
     return {
         html: renderResult.html,

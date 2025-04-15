@@ -1,0 +1,17 @@
+<mjml>
+  <mj-body>
+    <mj-section>
+      <mj-column>
+        <mj-text>Your order {{var:orderId}} has been shipped.</mj-text>
+        {% if var:trackingNumber %}
+          <mj-text>Tracking Number: {{var:trackingNumber}}</mj-text>
+        {% else %}
+          <mj-text>No tracking information available.</mj-text>
+        {% endif %}
+        {% for item in var:items %}
+          <mj-text>Item: {{var:item.name}}</mj-text>
+        {% endfor %}
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

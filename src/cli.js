@@ -3,11 +3,11 @@ import { convertCommand } from './commands/convert.js';
 
 program
   .version('1.0.0')
-  .description('MJML Email Sender CLI');
+  .description('Mailjet to Brevo conversion CLI');
 
 program
   .command('convert <mjmlPath> [outputPath]')
-  .description('Convert MJML template to HTML file')
+  .description('Convert Mailjet MJML template to HTML Brevo template file')
   .option('--strict', 'Use strict validation (fails on unconvertible patterns)')
   .option('--save-preview', 'Save template variable preview data as JSON')
   .action((mjmlPath, outputPath, options) => {

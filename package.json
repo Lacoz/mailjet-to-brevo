@@ -1,0 +1,19 @@
+{
+  "name": "mailjet-to-brevo",
+  "version": "1.0.0",
+  "description": "Script to convert Mailjet template to Brevo template",
+  "main": "index.js",
+  "bin": {
+    "run": "./bin/run"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "mjml": "^4.14.1",
+    "commander": "^8.3.0"
+  },
+  "author": "",
+  "license": "ISC"
+}

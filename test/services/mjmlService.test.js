@@ -46,19 +46,9 @@ describe('MJMLService', () => {
       expect(result.canBeConverted).to.be.true;
     });
 
-    it('should convert simple variable references', () => {
+    it('should not convert simple variable references', () => {
       const input = '<div>{{userName}}</div>';
-      const expected = '<div>{{params.userName}}</div>';
-      
-      const result = MJMLService.convertMailjetToBrevo(input);
-      
-      expect(result.content).to.equal(expected);
-      expect(result.canBeConverted).to.be.true;
-    });
-
-    it('should handle variables with filters', () => {
-      const input = '<div>{{userName | capitalize}}</div>';
-      const expected = '<div>{{params.userName | capitalize}}</div>';
+      const expected = '<div>{{userName}}</div>';
       
       const result = MJMLService.convertMailjetToBrevo(input);
       
@@ -86,9 +76,9 @@ describe('MJMLService', () => {
       expect(result.canBeConverted).to.be.true;
     });
 
-    it('should convert regular if statements', () => {
+    it('should not convert regular if statements', () => {
       const input = '{% if isActive == "true" %}Active{% endif %}';
-      const expected = '{% if params.isActive == "true" %}Active{% endif %}';
+      const expected = '{% if isActive == "true" %}Active{% endif %}';
       
       const result = MJMLService.convertMailjetToBrevo(input);
       
@@ -106,9 +96,9 @@ describe('MJMLService', () => {
       expect(result.canBeConverted).to.be.true;
     });
 
-    it('should convert regular for loops', () => {
+    it('should not convert regular for loops', () => {
       const input = '{% for item in items %}{{item.name}}{% endfor %}';
-      const expected = '{% for item in params.items %}{{item.name}}{% endfor %}';
+      const expected = '{% for item in items %}{{item.name}}{% endfor %}';
       
       const result = MJMLService.convertMailjetToBrevo(input);
       
@@ -146,15 +136,6 @@ describe('MJMLService', () => {
       expect(result.canBeConverted).to.be.true;
     });
 
-    it('should not modify dot notation in loops', () => {
-      const input = '{% for item in items %}{{item.name}}{% endfor %}';
-      const expected = '{% for item in params.items %}{{item.name}}{% endfor %}';
-      
-      const result = MJMLService.convertMailjetToBrevo(input);
-      
-      expect(result.content).to.equal(expected);
-      expect(result.canBeConverted).to.be.true;
-    });
 
     it('should detect unsupported Brevo features', () => {
       const input = '{% set variable = "value" %}';
@@ -233,5 +214,111 @@ describe('MJMLService', () => {
       const expectedContent = JSON.stringify(data, null, 2);
       expect(mockFs.writeFileSync.calledWith(outputPath, expectedContent)).to.be.true;
     });
+  });
+
+
+  describe('nested conditional logic', () => {
+    beforeEach(() => {
+      sinon.stub(MJMLService, 'extractTemplateVariables').returns({
+        items: [
+          { name: 'Product 1', discount: 10 },
+          { name: 'Product 2', discount: 0 }
+        ],
+        orderId: '12345'
+      });
+    });
+
+    afterEach(() => {
+      sinon.restore();
+    });
+
+    it('should properly handle if conditions inside for loops', () => {
+      const template = `
+        {% for item in var:items %}
+          {{item.name}}
+          {% if item.discount > 0 %}Has discount: {{item.discount}}%{% endif %}
+        {% endfor %}
+      `;
+      
+      const expected = `
+        {% for item in params.items %}
+          {{item.name}}
+          {% if item.discount > 0 %}Has discount: {{item.discount}}%{% endif %}
+        {% endfor %}
+      `;
+      
+      const result = MJMLService.convertMailjetToBrevo(template);
+      
+      expect(result.content).to.equal(expected);
+      expect(result.canBeConverted).to.be.true;
+    });
+
+    it('should preserve item properties in nested conditions', () => {
+      const template = `
+        {% for item in var:items %}
+          {{item.name}}
+          {% if item.discount == 10 %}
+            Special discount applies
+          {% elseif item.discount > 0 %}
+            Regular discount: {{item.discount}}%
+          {% else %}
+            No discount
+          {% endif %}
+        {% endfor %}
+      `;
+      
+      const expected = `
+        {% for item in params.items %}
+          {{item.name}}
+          {% if item.discount == 10 %}
+            Special discount applies
+          {% elif item.discount > 0 %}
+            Regular discount: {{item.discount}}%
+          {% else %}
+            No discount
+          {% endif %}
+        {% endfor %}
+      `;
+      
+      const result = MJMLService.convertMailjetToBrevo(template);
+      
+      expect(result.content).to.equal(expected);
+      expect(result.canBeConverted).to.be.true;
+    });
+
+    it('should process real-world template with nested logic correctly', () => {
+      // Using the example provided from transactional.mjml
+      const template = `
+        <mj-text>Your order {{var:orderId}} has been shipped.</mj-text>
+        {% if var:trackingNumber %}
+          <mj-text>Tracking Number: {{var:trackingNumber}}</mj-text>
+        {% else %}
+          <mj-text>No tracking information available.</mj-text>
+        {% endif %}
+        {% for item in var:items %}
+          <mj-text>Item: {{item.name}} </mj-text>
+          {% if item.discount > 1 %}<mj-text>Discount is {{item.discount}}</mj-text>{% endif %}
+        {% endfor %}
+      `;
+      
+      const expected = `
+        <mj-text>Your order {{params.orderId}} has been shipped.</mj-text>
+        {% if params.trackingNumber %}
+          <mj-text>Tracking Number: {{params.trackingNumber}}</mj-text>
+        {% else %}
+          <mj-text>No tracking information available.</mj-text>
+        {% endif %}
+        {% for item in params.items %}
+          <mj-text>Item: {{item.name}} </mj-text>
+          {% if item.discount > 1 %}<mj-text>Discount is {{item.discount}}</mj-text>{% endif %}
+        {% endfor %}
+      `;
+      
+      const result = MJMLService.convertMailjetToBrevo(template);
+      
+      expect(result.content).to.equal(expected);
+      expect(result.canBeConverted).to.be.true;
+    });
+
   });
 });

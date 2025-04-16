@@ -24,26 +24,7 @@ export class MJMLService {
       }
     );
     
-    // 2. Convert any remaining simple variable references (without default values)
-    // {{varName}} -> {{params.varName}}
-    convertedContent = convertedContent.replace(/\{\{\s*([^}|:"]+)(?!\|default|\.)(?:\s*\|\s*([^}]+))?\s*\}\}/g, 
-      (match, varName, filter) => {
-        // Skip if already processed or contains dots (object notation)
-        if (match.includes('params.') || varName.includes('.')) {
-          return match;
-        }
-        
-        // Handle variables with filters
-        if (filter) {
-          return `{{params.${varName.trim()} | ${filter}}}`;
-        }
-        
-        // Simple variable replacement
-        return `{{params.${varName.trim()}}}`;
-      }
-    );
-
-    // 3. Convert if statements with var: prefix
+    // 2. Convert if statements with var: prefix
     // Mailjet: {% if var:variable == "value" %} -> Brevo: {% if params.variable == "value" %}
     convertedContent = convertedContent.replace(/{%\s*if\s+var:([^}%]+)\s*%}/g, 
       (match, condition) => {
@@ -53,21 +34,7 @@ export class MJMLService {
       }
     );
     
-    // Also handle regular if statements (no var: prefix)
-    convertedContent = convertedContent.replace(/{%\s*if\s+([^}%]+)\s*%}/g, 
-      (match, condition) => {
-        // Skip if already processed
-        if (condition.includes('params.')) {
-          return match;
-        }
-        
-        // Add params. prefix to variables in condition
-        const newCondition = condition.trim().replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
-        return `{% if ${newCondition} %}`;
-      }
-    );
-    
-    // 4. Convert for loops
+    // 3. Convert for loops with var: prefix
     // Mailjet: {% for item in var:items %} -> Brevo: {% for item in params.items %}
     convertedContent = convertedContent.replace(/{%\s*for\s+([a-zA-Z0-9_]+)\s+in\s+var:([^}%]+)\s*%}/g, 
       (match, itemVar, collection) => {
@@ -75,73 +42,21 @@ export class MJMLService {
       }
     );
     
-    // Also handle regular for loops (no var: prefix)
-    convertedContent = convertedContent.replace(/{%\s*for\s+([a-zA-Z0-9_]+)\s+in\s+([^}%]+)\s*%}/g, 
-      (match, itemVar, collection) => {
-        // Skip if already processed or if it's not a variable name (e.g. a range)
-        if (collection.includes('params.') || collection.includes('range')) {
-          return match;
-        }
-        
-        return `{% for ${itemVar} in params.${collection.trim()} %}`;
-      }
-    );
-    
-    // Special case: Fix variable references inside for loops with range
-    // We need this to handle cases like {% for n in range(1, 5) %}{{n}}{% endfor %}
-    // where 'n' shouldn't be prefixed with params.
-    convertedContent = convertedContent.replace(/{%\s*for\s+([a-zA-Z0-9_]+)\s+in\s+range\([^}%]+\s*%}(.*?){%\s*endfor\s*%}/gs,
-      (match, loopVar, loopContent) => {
-        // Fix loop variables by removing params. prefix from the loop variable
-        const fixedContent = loopContent.replace(
-          new RegExp(`{{\\s*params\\.${loopVar}\\b([^}]*)}}`, 'g'),
-          `{{${loopVar}$1}}`
-        );
-        return match.replace(loopContent, fixedContent);
-      }
-    );
-    
-    // 5. Convert elseif statements to elif (Brevo uses elif instead of elseif)
-    // First convert var: prefixed elseif
-    convertedContent = convertedContent.replace(/{%\s*elseif\s+var:([^}%]+)\s*%}/g, 
-      (match, condition) => {
-        // Add params. prefix to variables in condition
-        const newCondition = condition.trim().replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
-        return `{% elif ${newCondition} %}`;
-      }
-    );
-    
-    // Then convert regular elseif statements (no var: prefix)
+    // 4. Convert elseif statements to elif (Brevo uses elif instead of elseif)
     convertedContent = convertedContent.replace(/{%\s*elseif\s+([^}%]+)\s*%}/g, 
       (match, condition) => {
-        // Skip if already processed
-        if (condition.includes('params.')) {
-          return `{% elif ${condition.trim()} %}`;
-        }
-        
-        // Add params. prefix to variables in condition
-        const newCondition = condition.trim().replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
-        return `{% elif ${newCondition} %}`;
+        return `{% elif ${condition.trim()} %}`;
       }
     );
     
-    // 6. Standardize "else if" -> "elif" (Brevo uses elif)
+    // 5. Standardize "else if" -> "elif" (Brevo uses elif)
     convertedContent = convertedContent.replace(/{%\s*else\s+if\s+([^}%]+)\s*%}/g, 
       (match, condition) => {
-        // Add params. prefix to variables in condition if not already present
-        let newCondition = condition;
-        if (!condition.includes('params.')) {
-          newCondition = condition.trim().replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
-        }
-        return `{% elif ${newCondition} %}`;
+        return `{% elif ${condition.trim()} %}`;
       }
     );
 
-    // 7. Handle object access in loops (don't prefix these with params)
-    // For example: {{ offer.link }} in a for loop should remain as is
-    // This is handled by skipping variables with dots in step 2
-
-    // 8. Check for unsupported Brevo features according to documentation
+    // 6. Check for unsupported Brevo features according to documentation
     const unsupportedFeatures = [
       { 
         pattern: /{%\s*set\s+/, 
@@ -281,48 +196,30 @@ export class MJMLService {
     };
     
     try {
-      // Extract variables for preview before any conversion
+      // Extract variables for preview
       const previewData = this.extractTemplateVariables(mjmlContent);
       
-      // First, try to convert any template syntax within the MJML itself
-      // This handles variables in the MJML attributes
-      const preMjmlConversion = this.convertMailjetToBrevo(mjmlContent);
+      // First, convert any template syntax
+      const conversionResult = this.convertMailjetToBrevo(mjmlContent);
       
-      // Check if there are unconvertible patterns in the MJML
-      if (preMjmlConversion.unconvertiblePatterns.length > 0) {
-        console.warn('Warning: Unconvertible patterns in MJML:');
-        preMjmlConversion.unconvertiblePatterns.forEach(p => {
-          console.warn(`  - ${p.message}`);
-        });
-        
-        if (options.strictSyntax) {
-          throw new Error('Cannot convert Mailjet syntax to Brevo: ' + 
-            preMjmlConversion.unconvertiblePatterns.map(p => p.message).join(', '));
-        }
-      }
-      
-      // Render the MJML to HTML
-      const result = mjml2html(preMjmlConversion.content, mjmlOptions);
-      
-      // Now convert any template syntax in the rendered HTML
-      const conversionResult = this.convertMailjetToBrevo(result.html);
-      
-      // Check if there are unconvertible patterns in the HTML
+      // Check if there are unconvertible patterns
       if (conversionResult.unconvertiblePatterns.length > 0) {
-        console.warn('Warning: Unconvertible patterns in rendered HTML:');
+        console.warn('Warning: Unconvertible patterns:');
         conversionResult.unconvertiblePatterns.forEach(p => {
           console.warn(`  - ${p.message}`);
         });
         
-        // If we're in strict mode, fail the conversion
         if (options.strictSyntax) {
           throw new Error('Cannot convert Mailjet syntax to Brevo: ' + 
             conversionResult.unconvertiblePatterns.map(p => p.message).join(', '));
         }
       }
       
+      // Now render the MJML to HTML
+      const result = mjml2html(conversionResult.content, mjmlOptions);
+      
       return {
-        html: conversionResult.content,
+        html: result.html,
         previewData
       };
     } catch (error) {

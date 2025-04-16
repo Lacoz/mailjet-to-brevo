@@ -10,6 +10,8 @@
         {% endif %}
         {% for item in var:items %}
           <mj-text>Item: {{item.name}}</mj-text>
+          {% if item.discount > 1 %}<mj-text>Discount is {{item.discount}}</mj-text>{% endif %}
+
         {% endfor %}
 
 

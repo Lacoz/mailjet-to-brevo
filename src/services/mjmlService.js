@@ -274,6 +274,7 @@ export class MJMLService {
     const mjmlOptions = {
       keepComments: false,
       minify: false,
+      beautify: true,
       validationLevel: options.validationLevel || 'skip',
       filePath: options.filePath,
       ignoreIncludes: true
@@ -281,7 +282,7 @@ export class MJMLService {
     
     try {
       // Extract variables for preview before any conversion
-      const originalVariables = this.extractTemplateVariables(mjmlContent);
+      const previewData = this.extractTemplateVariables(mjmlContent);
       
       // First, try to convert any template syntax within the MJML itself
       // This handles variables in the MJML attributes
@@ -322,7 +323,7 @@ export class MJMLService {
       
       return {
         html: conversionResult.content,
-        originalVariables
+        previewData
       };
     } catch (error) {
       console.error('MJML rendering or conversion error:', error);

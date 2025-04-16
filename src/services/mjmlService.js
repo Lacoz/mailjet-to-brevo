@@ -43,12 +43,12 @@ export class MJMLService {
       }
     );
 
-    // 3. Convert if statements
+    // 3. Convert if statements with var: prefix
     // Mailjet: {% if var:variable == "value" %} -> Brevo: {% if params.variable == "value" %}
     convertedContent = convertedContent.replace(/{%\s*if\s+var:([^}%]+)\s*%}/g, 
       (match, condition) => {
         // Add params. prefix to variables in condition
-        const newCondition = condition.replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
+        const newCondition = condition.trim().replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
         return `{% if ${newCondition} %}`;
       }
     );
@@ -62,7 +62,7 @@ export class MJMLService {
         }
         
         // Add params. prefix to variables in condition
-        const newCondition = condition.replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
+        const newCondition = condition.trim().replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
         return `{% if ${newCondition} %}`;
       }
     );
@@ -87,12 +87,26 @@ export class MJMLService {
       }
     );
     
+    // Special case: Fix variable references inside for loops with range
+    // We need this to handle cases like {% for n in range(1, 5) %}{{n}}{% endfor %}
+    // where 'n' shouldn't be prefixed with params.
+    convertedContent = convertedContent.replace(/{%\s*for\s+([a-zA-Z0-9_]+)\s+in\s+range\([^}%]+\s*%}(.*?){%\s*endfor\s*%}/gs,
+      (match, loopVar, loopContent) => {
+        // Fix loop variables by removing params. prefix from the loop variable
+        const fixedContent = loopContent.replace(
+          new RegExp(`{{\\s*params\\.${loopVar}\\b([^}]*)}}`, 'g'),
+          `{{${loopVar}$1}}`
+        );
+        return match.replace(loopContent, fixedContent);
+      }
+    );
+    
     // 5. Convert elseif statements to elif (Brevo uses elif instead of elseif)
     // First convert var: prefixed elseif
     convertedContent = convertedContent.replace(/{%\s*elseif\s+var:([^}%]+)\s*%}/g, 
       (match, condition) => {
         // Add params. prefix to variables in condition
-        const newCondition = condition.replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
+        const newCondition = condition.trim().replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
         return `{% elif ${newCondition} %}`;
       }
     );
@@ -102,11 +116,11 @@ export class MJMLService {
       (match, condition) => {
         // Skip if already processed
         if (condition.includes('params.')) {
-          return `{% elif ${condition} %}`;
+          return `{% elif ${condition.trim()} %}`;
         }
         
         // Add params. prefix to variables in condition
-        const newCondition = condition.replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
+        const newCondition = condition.trim().replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
         return `{% elif ${newCondition} %}`;
       }
     );
@@ -115,10 +129,11 @@ export class MJMLService {
     convertedContent = convertedContent.replace(/{%\s*else\s+if\s+([^}%]+)\s*%}/g, 
       (match, condition) => {
         // Add params. prefix to variables in condition if not already present
+        let newCondition = condition;
         if (!condition.includes('params.')) {
-          condition = condition.replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
+          newCondition = condition.trim().replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
         }
-        return `{% elif ${condition} %}`;
+        return `{% elif ${newCondition} %}`;
       }
     );
 
@@ -267,7 +282,6 @@ export class MJMLService {
     try {
       // Extract variables for preview before any conversion
       const originalVariables = this.extractTemplateVariables(mjmlContent);
-      const previewData = originalVariables;
       
       // First, try to convert any template syntax within the MJML itself
       // This handles variables in the MJML attributes
@@ -308,7 +322,7 @@ export class MJMLService {
       
       return {
         html: conversionResult.content,
-        previewData
+        originalVariables
       };
     } catch (error) {
       console.error('MJML rendering or conversion error:', error);

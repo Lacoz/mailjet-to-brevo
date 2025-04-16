@@ -12,6 +12,9 @@
           <mj-text>Item: {{item.name}}</mj-text>
         {% endfor %}
 
+
+        {% set var1 = "val1" %}
+        {% include "template.html" %}
       </mj-column>
     </mj-section>
   </mj-body>

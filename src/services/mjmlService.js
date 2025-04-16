@@ -272,7 +272,7 @@ export class MJMLService {
   static render(mjmlContent, options = {}) {
     // Configure MJML with permissive options
     const mjmlOptions = {
-      keepComments: false,
+      keepComments: true,
       minify: false,
       beautify: true,
       validationLevel: options.validationLevel || 'skip',

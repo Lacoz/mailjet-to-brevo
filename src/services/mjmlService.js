@@ -1,134 +1,55 @@
 import mjml2html from 'mjml';
 import fs from 'fs';
 import path from 'path';
+import antlr4 from 'antlr4';
+import { MailjetTemplateLexer } from '../parser/MailjetTemplateLexer.js';
+import { MailjetTemplateParser } from '../parser/MailjetTemplateParser.js';
+
 
 export class MJMLService {
   /**
-   * Convert Mailjet syntax to Brevo syntax
+   * Convert Mailjet syntax to Brevo syntax using ANTLR4 parser
    * @param {string} content - HTML content with Mailjet syntax
    * @returns {Object} - Result with converted content and any unconvertible patterns
    */
   static convertMailjetToBrevo(content) {
-    // Track any patterns we couldn't convert
-    const unconvertiblePatterns = [];
-    let convertedContent = content;
-
-    // 1. Convert variable syntax with default values
-    // Mailjet: {{var:VARNAME:"default value"}} -> Brevo: {{params.VARNAME|default:"default value"}}
-    convertedContent = convertedContent.replace(/\{\{var:([^}|:"]+)(?::\"([^\"]*)\")?\s*\}\}/g, 
-      (match, varName, defaultValue) => {
-        if (defaultValue) {
-          return `{{params.${varName.trim()}|default:"${defaultValue}"}}`;
-        }
-        return `{{params.${varName.trim()}}}`;
-      }
-    );
-    
-    // 2. Convert if statements with var: prefix
-    // Mailjet: {% if var:variable == "value" %} -> Brevo: {% if params.variable == "value" %}
-    convertedContent = convertedContent.replace(/{%\s*if\s+var:([^}%]+)\s*%}/g, 
-      (match, condition) => {
-        // Add params. prefix to variables in condition
-        const newCondition = condition.trim().replace(/\b([a-zA-Z0-9_]+)(\s*[=!<>]+)/g, 'params.$1$2');
-        return `{% if ${newCondition} %}`;
-      }
-    );
-    
-    // 3. Convert for loops with var: prefix
-    // Mailjet: {% for item in var:items %} -> Brevo: {% for item in params.items %}
-    convertedContent = convertedContent.replace(/{%\s*for\s+([a-zA-Z0-9_]+)\s+in\s+var:([^}%]+)\s*%}/g, 
-      (match, itemVar, collection) => {
-        return `{% for ${itemVar} in params.${collection.trim()} %}`;
-      }
-    );
-    
-    // 4. Convert elseif statements to elif (Brevo uses elif instead of elseif)
-    convertedContent = convertedContent.replace(/{%\s*elseif\s+([^}%]+)\s*%}/g, 
-      (match, condition) => {
-        return `{% elif ${condition.trim()} %}`;
-      }
-    );
-    
-    // 5. Standardize "else if" -> "elif" (Brevo uses elif)
-    convertedContent = convertedContent.replace(/{%\s*else\s+if\s+([^}%]+)\s*%}/g, 
-      (match, condition) => {
-        return `{% elif ${condition.trim()} %}`;
-      }
-    );
-
-    // 6. Check for unsupported Brevo features according to documentation
-    const unsupportedFeatures = [
-      { 
-        pattern: /{%\s*set\s+/, 
-        message: "Tag 'set' is not supported in Brevo" 
-      },
-      { 
-        pattern: /{%\s*include\s+/, 
-        message: "Tag 'include' is not supported in Brevo" 
-      },
-      { 
-        pattern: /{%\s*extends\s+/, 
-        message: "Tag 'extends' is not supported in Brevo" 
-      },
-      { 
-        pattern: /{%\s*block\s+/, 
-        message: "Tag 'block' is not supported in Brevo" 
-      },
-      { 
-        pattern: /{%\s*macro\s+/, 
-        message: "Tag 'macro' is not supported in Brevo" 
-      },
-      { 
-        pattern: /{%\s*import\s+/, 
-        message: "Tag 'import' is not supported in Brevo" 
-      },
-      { 
-        pattern: /{%\s*from\s+/, 
-        message: "Tag 'from' is not supported in Brevo" 
-      },
-      { 
-        pattern: /\|\s*date_modify/, 
-        message: "Filter 'date_modify' is not supported in Brevo" 
-      },
-      { 
-        pattern: /\|\s*trans/, 
-        message: "Filter 'trans' is not supported in Brevo" 
-      },
-      { 
-        pattern: /\|\s*raw/, 
-        message: "Filter 'raw' is not supported in Brevo" 
-      },
-      { 
-        pattern: /\|\s*batch/, 
-        message: "Filter 'batch' is not supported in Brevo" 
-      },
-      { 
-        pattern: /{%\s*autoescape\s+/, 
-        message: "Tag 'autoescape' is not supported in Brevo" 
-      },
-      { 
-        pattern: /{%\s*spaceless\s+/, 
-        message: "Tag 'spaceless' is not supported in Brevo" 
-      }
-    ];
-    
-    unsupportedFeatures.forEach(({pattern, message}) => {
-      if (pattern.test(convertedContent)) {
-        const match = convertedContent.match(pattern);
-        if (match) {
-          unconvertiblePatterns.push({
-            pattern: match[0],
-            message
-          });
-        }
-      }
-    });
-
-    return {
-      content: convertedContent,
-      unconvertiblePatterns,
-      canBeConverted: unconvertiblePatterns.length === 0
-    };
+    try {
+      // Create the lexer and parser
+      const chars = new antlr4.InputStream(content);
+      const lexer = new MailjetTemplateLexer(chars);
+      const tokens = new antlr4.CommonTokenStream(lexer);
+      const parser = new MailjetTemplateParser(tokens);
+      
+      // Parse the input
+      const tree = parser.template();
+      
+      // Visit the parse tree with our visitor
+      const visitor = new MailjetToBrevoVisitor();
+      visitor.visit(tree);
+      
+      // Get results and errors
+      const convertedContent = visitor.result;
+      const unconvertiblePatterns = visitor.errors.map(error => ({
+        pattern: error.pattern,
+        message: error.message
+      }));
+      
+      return {
+        content: convertedContent,
+        unconvertiblePatterns,
+        canBeConverted: unconvertiblePatterns.length === 0
+      };
+    } catch (error) {
+      console.error('Error parsing template:', error);
+      return {
+        content: content, // Return original content
+        unconvertiblePatterns: [{
+          pattern: 'Unknown',
+          message: `Parser error: ${error.message}`
+        }],
+        canBeConverted: false
+      };
+    }
   }
 
   /**
@@ -137,7 +58,7 @@ export class MJMLService {
    * @returns {Object} - Object with extracted variables and their default values
    */
   static extractTemplateVariables(content) {
-    // Extract variables with default values: {{ var:varName:"default value" }}
+    // Existing implementation
     const variablePattern = /\{\{(?:var:)?([a-zA-Z0-9_\-.]+)(?::\"([^\"]*)\"|:[^}]*|)\s*\}\}/g;
     const variables = {};
     let match;

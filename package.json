@@ -12,6 +12,7 @@
     "test": "mocha test/**/*.test.js"
   },
   "dependencies": {
+    "antlr4": "^4.13.2",
     "commander": "^8.3.0",
     "mjml": "^4.14.1"
   },
